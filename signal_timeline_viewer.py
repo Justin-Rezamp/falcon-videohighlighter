@@ -98,6 +98,7 @@ class SignalLabelPanel(QWidget):
         "MOTION EVENTS":  lambda scene: scene._nav_timestamps_motion_events(),
         "MOTION PEAKS":   lambda scene: scene._nav_timestamps_motion_peaks(),
         "AUDIO PEAKS":    lambda scene: scene._nav_timestamps_audio_peaks(),
+        "PARENT TAPS":    lambda scene: scene._nav_timestamps_parent_taps(),
         "HIGHLIGHTS":     lambda scene: scene._nav_timestamps_highlights(),
         "TRANSCRIPT":     lambda scene: scene._nav_timestamps_transcript(),
         "VISUAL SEARCH":  lambda scene: scene._nav_timestamps_visual_search(),

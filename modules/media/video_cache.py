@@ -86,6 +86,13 @@ def build_analysis_cache_params(gui_config: dict, config: dict, sample_rate: int
     # holding the old models' actions must not be reused for a run that wants
     # actions. Added only then: a run without actions keeps its cache, and
     # with it a transcript that can take an hour to make again.
+    # Falcon footage (modules/falcon): pan-compensated motion and a proxy's
+    # motion differ from the plain pass. Recorded only when on, so every cache
+    # made without them stays valid.
+    if gui_config.get("camera_compensation"):
+        params["camera_compensation"] = True
+    if gui_config.get("analysis_proxy"):
+        params["analysis_proxy"] = str(gui_config.get("analysis_proxy"))
     if interesting_actions or float(gui_config.get("action_points", 0) or 0) > 0:
         params["action_detector"] = "siglip2"
         # 8 frames per window finds different actions than 4. Recorded only

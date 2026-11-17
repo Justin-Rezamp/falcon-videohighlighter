@@ -942,9 +942,16 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                 try:
                     check_cancellation(cancel_flag, log, "motion detection")
                     
+                    # Falcon (modules/falcon): 4K/HEVC can be analysed through
+                    # a 360p proxy; timestamps are unchanged.
+                    from modules.falcon.pipeline_hooks import analysis_source
+                    motion_source = analysis_source(
+                        gui_config, processed_video_path,
+                        gui_config.get("cache_dir", "./cache"), log_fn=log)
+
                     # Call the actual motion detection function with video path
                     result = detect_scenes_motion_optimized(
-                        processed_video_path,
+                        motion_source,
                         # Was hardcoded to 70.0, which made `scene_threshold` a
                         # phantom setting: it sits in the analysis cache
                         # signature, so changing it forced a full re-analysis
@@ -959,8 +966,15 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                         device=motion_device,
                         cancel_flag=cancel_flag,
                         details=motion_details,
+                        # An auto-panning camera (XbotGo Falcon) moves the whole
+                        # frame; without this the pan is scored as action.
+                        camera_compensation=bool(gui_config.get("camera_compensation", False)),
                     )
                     motion_curve = motion_details.get("motion_curve")
+                    if motion_details.get("camera_pan"):
+                        pan = motion_details["camera_pan"]
+                        log(f"🎥 Camera pan compensated on {pan['moving_share']:.0%} of "
+                            f"frame pairs (median shift {pan['median_shift_px']:.0f}px)")
                     
                     # Unpack the results
                     if result and len(result) == 3:
@@ -1702,6 +1716,19 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
         face_score = np.zeros_like(score)
         action_score = np.zeros(int(video_duration) + 1)
 
+        # Parent taps (XbotGo Falcon .mark files, modules/falcon): a parent
+        # saying "something happened near here". A signal like the others,
+        # never proof of a goal.
+        from modules.falcon import pipeline_hooks as falcon_hooks
+        from modules.falcon.hybrid import tap_signal
+        PARENT_TAP_POINTS = float(gui_config.get("parent_tap_points",
+                                                 config.get("parent_tap_points", 0)) or 0)
+        falcon_taps = falcon_hooks.load_taps(
+            gui_config, original_video_path, video_duration,
+            offset=float(RANGE_START) if processed_video_path != original_video_path else 0.0,
+            log_fn=log)
+        parent_tap_score = tap_signal(falcon_taps, video_duration, PARENT_TAP_POINTS)
+
         # Scoring configuration: prefer gui overrides, else config.yaml, else defaults
         SCENE_POINTS = gui_config.get("scene_points", config.get("scene_points", 0))
         MOTION_EVENT_POINTS = gui_config.get("motion_event_points", config.get("motion_event_points", 0))
@@ -1765,8 +1792,9 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
         total_possible = (SCENE_POINTS + MOTION_PEAK_POINTS + MOTION_EVENT_POINTS +
                         AUDIO_PEAK_POINTS + LOUDNESS_BURST_POINTS +
                         KEYWORD_POINTS + BEGINNING_POINTS +
-                        ENDING_POINTS + OBJECT_POINTS + ACTION_POINTS)
-        if total_possible == 0:
+                        ENDING_POINTS + OBJECT_POINTS + ACTION_POINTS +
+                        (PARENT_TAP_POINTS if falcon_taps else 0))
+        if total_possible == 0 and not falcon_hooks.mode(gui_config):
             log("⚠️ WARNING: All scoring signals are set to 0. No moments will be scored and "
                 "no highlight will be generated in MAX mode. Enable at least one scoring signal.")
 
@@ -1921,6 +1949,11 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                  loudness_burst_score +
                  keyword_score + beginning_score + ending_score + object_score +
                  action_score + face_score)
+        # What the detectors say on their own — the hybrid Falcon plan slides tap
+        # windows toward this, so the slide is never just the tap agreeing with itself.
+        detector_score = score.copy()
+        score = score + parent_tap_score
+        tap_set = set(int(i) for i in np.nonzero(parent_tap_score)[0])
 
         # Multi-signal boost
         motion_set = set(int(t) for t in motion_events)
@@ -1937,7 +1970,8 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                 i in loudness_burst_set,
                 i in keyword_set,
                 i in object_set,
-                i in action_set
+                i in action_set,
+                i in tap_set,
             ])
             if signals >= MIN_SIGNALS_FOR_BOOST:
                 score[i] *= MULTI_SIGNAL_BOOST
@@ -2060,6 +2094,18 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
             if COVERAGE > 0:
                 log(f"🎞️ Coverage {COVERAGE:.0%} → spreading clips across the video")
 
+        # Falcon marks / hybrid mode: one clip per parent tap (runner rules),
+        # replacing the scorer's pick. Hybrid slides are inferences and say so.
+        falcon_plan = falcon_hooks.plan_segments(gui_config, falcon_taps,
+                                                 detector_score, video_duration)
+        if falcon_plan is not None:
+            segments, falcon_clips, falcon_notes = falcon_plan
+            log(f"👆 Falcon {falcon_hooks.mode(gui_config)} plan: {len(falcon_taps)} parent "
+                f"taps → {len(falcon_clips)} clips "
+                f"({sum(c.merged for c in falcon_clips)} merged)")
+            for note in falcon_notes:
+                log(f"   {note}")
+
         # Sort segments by start time (both modes)
         segments.sort(key=lambda x: x[0])
 
@@ -2180,6 +2226,7 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                         "face": face_score,
                         "beginning": beginning_score,
                         "ending": ending_score,
+                        "parent_tap": parent_tap_score,
                     },
                     segments=segments,
                     object_detections=object_detections,
@@ -2196,6 +2243,7 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                         "keyword_points": KEYWORD_POINTS,
                         "object_points": OBJECT_POINTS,
                         "action_points": ACTION_POINTS,
+                        "parent_tap_points": PARENT_TAP_POINTS,
                         # Both, not just the weight: the advisor's rule for
                         # "weighted but no class chosen" needs to tell an empty
                         # selection from an absent setting, and without these
@@ -2228,6 +2276,7 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                             "object": len(object_detections or {}),
                             "action": len(detections_by_sec or {}),
                             "face": len(face_seconds or {}),
+                            "parent_tap": len(falcon_taps or []),
                         },
                     },
                     boost_multiplier=MULTI_SIGNAL_BOOST,
@@ -2320,7 +2369,9 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                     'audio_peak_points': AUDIO_PEAK_POINTS,
                     'keyword_points': KEYWORD_POINTS,
                     'object_points': OBJECT_POINTS,
-                    'action_points': ACTION_POINTS
+                    'action_points': ACTION_POINTS,
+                    'parent_tap_points': PARENT_TAP_POINTS,
+                    'falcon_mode': falcon_hooks.mode(gui_config),
                 }
                 
                 # Create segments metadata with scores - CONVERT NUMPY TYPES TO PYTHON NATIVE
@@ -2869,6 +2920,7 @@ def run_highlighter(video_path, sample_rate=5, gui_config: dict = None,
                 # so avoided-person splits are preserved) instead of letting it
                 # reload a stale highlight-history entry.
                 analysis_data['final_segments'] = [[float(s), float(e)] for s, e in segments]
+                analysis_data['parent_taps'] = [float(t) for t in falcon_taps]
 
                 # Hand the request to the GUI instead of building the window
                 # here. Qt widgets may only be created on the main thread, and

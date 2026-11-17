@@ -51,6 +51,9 @@ SIGNAL_LABELS = (
     ("object", "Objects"),
     ("action", "Actions"),
     ("face", "Expression"),
+    # XbotGo Falcon .mark taps (modules/falcon): a parent saying "something
+    # happened near here" — named for what it is, never as a goal.
+    ("parent_tap", "Parent tap"),
     # Position bonuses. Included because they feed the same total: if they were
     # omitted, the points they contribute would show up in `total - pre_boost`
     # and be reported as a multi-signal boost that never happened.
@@ -62,7 +65,7 @@ SIGNAL_LABELS = (
 # evidence about content, and the pipeline's own boost test excludes them, so
 # counting them here would over-report the signal count.
 BOOST_SIGNALS = ("motion_event", "motion_peak", "audio", "loudness_burst",
-                 "keyword", "object", "face")
+                 "keyword", "object", "face", "parent_tap")
 
 # How many unselected peaks to report. These are the moments a user would
 # adjust weights to capture, so they are the most actionable rows in the whole

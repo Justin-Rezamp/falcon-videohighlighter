@@ -200,6 +200,7 @@ class SignalTimelineScene(QGraphicsScene):
             'motion_events': QColor(255, 150, 50),
             'motion_peaks': QColor(255, 200, 100),
             'audio_peaks': QColor(150, 100, 255),
+            'parent_taps': QColor(255, 235, 80),
             'highlights': QColor(50, 200, 50),
             'visual_search': QColor(255, 100, 255),
         }
@@ -627,6 +628,10 @@ class SignalTimelineScene(QGraphicsScene):
         return [float(p) if not isinstance(p, dict) else float(p.get('time', 0))
                 for p in self.cache_data.get('audio_peaks', [])]
 
+    def _nav_timestamps_parent_taps(self):
+        """XbotGo Falcon .mark taps (modules/falcon), in the video's clock."""
+        return sorted(float(t) for t in self.cache_data.get('parent_taps', []) or [])
+
     def _nav_timestamps_waveform_peaks(self):
         """Peak times the AUDIO WAVEFORM ◀▶ arrows jump between — derived live
         from the waveform energy at the current sensitivity."""
@@ -680,6 +685,7 @@ class SignalTimelineScene(QGraphicsScene):
             'motion_events': self._nav_timestamps_motion_events,
             'motion_peaks': self._nav_timestamps_motion_peaks,
             'audio_peaks': self._nav_timestamps_audio_peaks,
+            'parent_taps': self._nav_timestamps_parent_taps,
             'highlights': self._nav_timestamps_highlights,
             'transcript': self._nav_timestamps_transcript,
             'visual_search': self._nav_timestamps_visual_search,
@@ -1048,6 +1054,10 @@ class SignalTimelineScene(QGraphicsScene):
         if self.visible_layers.get('audio_peaks', True):
             current_y = self.draw_audio_peaks_layer(current_y)
         
+        # Layer 7.5: Parent taps (Falcon .mark), only when the run had any
+        if self.visible_layers.get('parent_taps', True) and self.cache_data.get('parent_taps'):
+            current_y = self.draw_parent_taps_layer(current_y)
+
         # Layer 8: Highlight Segments
         if self.visible_layers.get('highlights', True):
             current_y = self.draw_highlights_layer(current_y)
@@ -1840,6 +1850,25 @@ class SignalTimelineScene(QGraphicsScene):
 
         return y_pos + self.layer_height + self.layer_spacing
     
+    def draw_parent_taps_layer(self, y_pos):
+        """One short bar per parent tap from a Falcon .mark file.
+
+        Labelled "Parent tap" and nothing stronger: a tap says a parent saw
+        something worth keeping near here, not what it was.
+        """
+        self.row_labels.append(("PARENT TAPS", y_pos))
+        for timestamp in self._nav_timestamps_parent_taps():
+            bar = TimelineBar(
+                timestamp, timestamp + 1.0,
+                y_pos, self.layer_height,
+                self.colors['parent_taps'], "Parent tap",
+                confidence=10,
+                metadata={'timestamp': timestamp, 'kind': 'parent_tap'}
+            )
+            self.draw_bar(bar)
+            self.bars.append(bar)
+        return y_pos + self.layer_height + self.layer_spacing
+
     def draw_highlights_layer(self, y_pos):
         """Draw final highlight segments with improved labeling"""
         self.row_labels.append(("HIGHLIGHTS", y_pos))
