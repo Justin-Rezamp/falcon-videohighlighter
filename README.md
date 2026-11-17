@@ -1,3 +1,8 @@
+> **Falcon VideoHighlighter** — this fork adds XbotGo Falcon youth-soccer
+> support: `.mark` parent taps, camera-pan compensation, a 4K/HEVC analysis
+> proxy and phone exports. See [docs/FALCON.md](docs/FALCON.md) and
+> [NOTICE](NOTICE). Based on VideoHighlighter (AGPL-3.0).
+
 <p align="center">
   <img src="assets/icon.png" alt="VideoHighlighter" width="160">
 </p>
