@@ -40,7 +40,8 @@ def detect_scenes_motion_optimized(video_path,
                                cancel_flag=None,
                                progress_callback=None,
                                analysis_region=None,
-                               details=None):  # Added cancellation support
+                               details=None,
+                               camera_compensation=False):  # Added cancellation support
     """
     Hybrid approach combining speed optimizations with accurate motion detection:
     - Fast GPU batching for initial processing
@@ -53,6 +54,12 @@ def detect_scenes_motion_optimized(video_path,
     modules/segments/motion_curve.py).
     An out-parameter rather than a fourth return value because every caller
     unpacks exactly three.
+
+    `camera_compensation` is for cameras that pan by themselves (the XbotGo
+    Falcon follows play): each pair of frames is aligned on its global shift
+    before differencing, so the pan is not counted as motion. See
+    modules/falcon/camera.py. `details` then also receives `camera_pan`, the
+    share of sampled frames where the camera moved and the median shift.
     """
     
     # Check for cancellation at start
@@ -115,6 +122,11 @@ def detect_scenes_motion_optimized(video_path,
     
     # Flag to signal frame loader to stop
     stop_loading = threading.Event()
+
+    if camera_compensation:
+        from modules.falcon.camera import compensated_diff, estimate_shift
+    # (frame index, |shift| px) per compensated pair, for details["camera_pan"].
+    camera_shifts = []
 
     if debug:
         print(f"=== HYBRID OPTIMIZED VIDEO PROCESSING ===")
@@ -270,7 +282,17 @@ def detect_scenes_motion_optimized(video_path,
             prev_batch = torch.stack(prev_frames)
             curr_batch = torch.stack(curr_frames)
 
-            gray_diff_batch = torch.abs(prev_batch - curr_batch)
+            if camera_compensation:
+                # Shift measured on the CPU copies (block-averaged, tiny FFT),
+                # applied to the tensors where they already live.
+                diffs = []
+                for j in range(len(prev_frames)):
+                    dy, dx = estimate_shift(batch_pairs[j][1], batch_pairs[j + 1][1])
+                    camera_shifts.append((batch_pairs[j + 1][0], abs(dy) + abs(dx)))
+                    diffs.append(compensated_diff(prev_frames[j], curr_frames[j], dy, dx))
+                gray_diff_batch = torch.stack(diffs)
+            else:
+                gray_diff_batch = torch.abs(prev_batch - curr_batch)
 
             # Blur operation
             gray_diff_batch = gray_diff_batch.unsqueeze(1)
@@ -532,6 +554,14 @@ def detect_scenes_motion_optimized(video_path,
             from modules.segments.motion_curve import build_curve
             details["motion_curve"] = build_curve(motion_energy, fps, video_duration,
                                                   exclude_frames=cut_frames)
+            if camera_compensation:
+                moved = [px for _idx, px in camera_shifts if px > 0]
+                details["camera_pan"] = {
+                    "pairs": len(camera_shifts),
+                    "moving_share": round(len(moved) / len(camera_shifts), 3)
+                    if camera_shifts else 0.0,
+                    "median_shift_px": float(np.median(moved)) if moved else 0.0,
+                }
 
         if debug and not (cancel_flag and cancel_flag.is_set()):
             print(f"Shots: {len(scenes)}, Motion events: {len(motion_events)}, Peaks: {len(motion_peaks)}")
