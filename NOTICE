@@ -1,0 +1,36 @@
+Falcon VideoHighlighter
+=======================
+
+This is a modified version of VideoHighlighter
+(https://github.com/Aseiel/VideoHighlighter), Copyright (C) 2026 Przemysław
+Kreft and Meric Donmezer, licensed under the GNU Affero General Public License
+version 3 or later. See COPYRIGHT and LICENSE (unmodified). As the AGPL
+requires, the complete corresponding source of this modified version is
+published at https://github.com/Justin-Rezamp/falcon-videohighlighter.
+
+Modifications (branch `falcon`, from upstream commit ec4a671), made in 2026 by
+Justin Schnettler, adapt the app to XbotGo Falcon youth-soccer recordings:
+
+  * modules/falcon/ (new): Falcon .mark / .vdata support, the marks-only and
+    hybrid clip plans, parent taps as a scoring signal, numpy-only camera-pan
+    compensation, a low-resolution analysis proxy for 4K/HEVC, phone-friendly
+    exports (1080p, vertical, letterbox, loudness normalisation), a
+    falcon-soccer preset, and a `python -m modules.falcon` command line.
+  * modules/segments/motion_scene_detect_optimized.py: optional camera-motion
+    compensation (`camera_compensation`).
+  * pipeline.py: the parent-tap signal, Falcon marks/hybrid plans, the proxy
+    and compensation switches.
+  * modules/media/video_cache.py, modules/report/highlight_report.py,
+    video_ai_editor/signal_timeline.py, signal_timeline_viewer.py, main.py,
+    sidecar/server.py, mcp_server/: wiring for the above ("Parent tap" in the
+    report and on the timeline, the `falcon:` config section, a /falcon/plan
+    route and a falcon_plan MCP tool).
+  * tests/test_falcon_*.py (new), tests/test_mcp_server.py (one tool added).
+  * docs/FALCON.md, requirements-falcon-lite.txt (new).
+
+Parts of modules/falcon/ are ported from falcon-hypecut, the same author's
+own Apache-2.0 project, and are distributed here under the AGPL-3.0-or-later
+as part of this work.
+
+These modifications are not contributed upstream. They are provided WITHOUT
+ANY WARRANTY, as set out in the GNU Affero General Public License.
