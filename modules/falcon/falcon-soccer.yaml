@@ -1,0 +1,44 @@
+# Falcon soccer — settings for XbotGo Falcon youth-soccer recordings.
+#
+# Same shape as config.yaml (and presets/*.yaml), so it loads as a preset:
+#     python -m modules.falcon preset --install
+# then pick "falcon-soccer" under Presets.
+#
+# Why these numbers: the Falcon records one continuous shot (no edits), so shot
+# changes score nothing; it pans to follow play, so motion is measured with the
+# camera's own pan taken out; and the parent's taps are the strongest hint
+# there is, so they carry the most weight — as a hint, never as proof of a goal.
+highlights:
+  clip_time: 0          # variable-length clips around what scored
+  max_duration: 420
+  auto_min_clip: 6
+  auto_max_clip: 30
+  auto_merge_gap: 2
+scoring:
+  scene_points: 0       # one continuous shot: a "cut" is a glitch, not a moment
+  motion_event_points: 0
+  motion_peak_points: 3
+  audio_peak_points: 2  # sideline cheering
+  loudness_burst_points: 3
+  keyword_points: 0
+  object_points: 0      # set objects.interesting to [sports ball] and this to 2 to try ball detection
+  action_points: 0
+  beginning_points: 0
+  ending_points: 0
+  multi_signal_boost: 1.2
+  min_signals_for_boost: 2
+advanced:
+  frame_skip: 5
+falcon:
+  marks: true             # look for the .mark file beside the video or in .data
+  mark_path: ''           # or name one explicitly
+  parent_tap_points: 10
+  mode: marks             # marks: one clip per tap (10 s before/after, merge within 2 s)
+                          # hybrid: same, slid up to 6 s earlier / 3 s later toward
+                          #         clear action (reported as an inference)
+                          # '': taps only boost the normal scorer
+  pad_before: 10
+  pad_after: 10
+  merge_gap: 2
+  camera_compensation: true
+  analysis_proxy: auto    # 4K or HEVC is analysed through a 360p copy

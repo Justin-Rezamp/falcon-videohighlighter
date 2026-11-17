@@ -1,0 +1,10 @@
+# The Falcon command line (python -m modules.falcon) on its own: .mark plans,
+# camera-compensated motion for the hybrid plan, cutting, joining and phone
+# exports. Needs an ffmpeg binary on PATH (and ffprobe, or `av` below).
+#
+# Everything here has Windows-on-ARM64 wheels for Python 3.12, so this is the
+# install for machines where requirements.txt cannot install (torch from PyPI,
+# OpenCV and OpenVINO have no win_arm64 wheels). See docs/FALCON.md.
+numpy
+pyyaml   # only for `preset`; the plan/cut/join/phone commands do not need it
+# av     # optional: probes video when ffprobe is not on PATH
