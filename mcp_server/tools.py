@@ -78,6 +78,15 @@ def scan_folder(path: str, recursive: bool = False, limit: int = 1000) -> dict:
             "truncated": truncated}
 
 
+def falcon_plan(path: str, mark: str = "", before: float = 10.0,
+                after: float = 10.0, merge_gap: float = 2.0) -> dict:
+    from modules.falcon.cli import build_plan
+
+    path = _existing_file(path)
+    return build_plan(path, mark=mark or None, mode="marks", before=before,
+                      after=after, merge_gap=merge_gap)
+
+
 def get_config() -> dict:
     import yaml
     from modules.system.app_paths import config_path

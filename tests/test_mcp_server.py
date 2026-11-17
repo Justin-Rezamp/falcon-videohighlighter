@@ -36,7 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 HAS_EXAMPLE_SEARCH = tools.has_example_search()
 
 EXPECTED_TOOLS = {
-    "get_info", "probe_video", "scan_folder", "get_config",
+    "get_info", "probe_video", "scan_folder", "get_config", "falcon_plan",
     "start_highlight_run", "start_visual_search", "more_like_these",
     "set_timeline_clips",
     "start_expression_scan",

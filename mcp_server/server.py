@@ -61,6 +61,16 @@ def build_server(jobs=None):
         return tools.scan_folder(path, recursive=recursive, limit=limit)
 
     @mcp.tool(annotations=read_only)
+    def falcon_plan(path: str, mark: str = "", before: float = 10.0,
+                    after: float = 10.0, merge_gap: float = 2.0) -> dict:
+        """Clip plan from an XbotGo Falcon recording's .mark file (parent taps):
+        10 s either side of each tap, windows within 2 s merged, clips named
+        clip01_mark_9-09.mp4. Reads only; cuts nothing. A tap is when a parent
+        pressed the button, not proof of a goal."""
+        return tools.falcon_plan(path, mark=mark, before=before, after=after,
+                                 merge_gap=merge_gap)
+
+    @mcp.tool(annotations=read_only)
     def get_config() -> dict:
         """The saved settings (config.yaml) the app and every run start from."""
         return tools.get_config()

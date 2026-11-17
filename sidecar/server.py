@@ -318,12 +318,58 @@ async def start_run(req: RunRequest) -> dict:
         loop = asyncio.get_running_loop()
         run_id = manager.start_job(
             {"kind": "run", "video_paths": list(req.video_paths),
-             "config": dict(req.config)},
+             "config": {**_falcon_defaults(), **dict(req.config)}},
             loop,
         )
         return {"ok": True, "run_id": run_id}
     except RuntimeError as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _falcon_defaults() -> dict:
+    """Run settings from config.yaml's ``falcon:`` section (modules/falcon).
+
+    The web UI has no Falcon controls yet, so a request's own keys win and
+    everything else comes from the file the desktop window shares.
+    """
+    try:
+        import yaml
+        from modules.falcon.preset import gui_settings
+        from modules.system.app_paths import config_path
+
+        path = config_path()
+        if not os.path.exists(path):
+            return {}
+        with open(path, encoding="utf-8") as fh:
+            return gui_settings(yaml.safe_load(fh) or {})
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ falcon settings not read: {exc}")
+        return {}
+
+
+@app.get("/falcon/plan")
+async def falcon_plan(path: str, mark: str = "", before: float = 10.0,
+                      after: float = 10.0, merge_gap: float = 2.0) -> dict:
+    """Marks-only clip plan for an XbotGo Falcon recording. Reads, never cuts.
+
+    Finds the .mark beside the video, in .data, or by a .vdata recording the
+    same byte size; ``mark`` names one explicitly. Taps are "parent taps":
+    when a parent pressed the button, not what happened.
+    """
+    from modules.falcon.cli import build_plan
+    from modules.falcon.marks import MarkFileError
+
+    if not os.path.isfile(path):
+        return {"ok": False, "error": f"Video not found: {path}"}
+    try:
+        plan = await asyncio.to_thread(build_plan, path, mark=mark or None,
+                                       mode="marks", before=before, after=after,
+                                       merge_gap=merge_gap)
+        return {"ok": True, "plan": plan}
+    except (MarkFileError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - probe failures are many shapes
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 @app.post("/cancel")

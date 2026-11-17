@@ -5172,6 +5172,9 @@ class VideoHighlighterGUI(QWidget):
             # written whole - anything missing here is deleted from config.yaml
             # the first time the user saves settings.
             "loudness_bursts": self.config_data.get("loudness_bursts", {}),
+            # XbotGo Falcon settings (modules/falcon); no widgets yet.
+            **({"falcon": self.config_data["falcon"]}
+               if isinstance(self.config_data.get("falcon"), dict) else {}),
             "advanced": {
                 "frame_skip": int(self.frame_skip_spin.value()),
                 "vr_mode": self.vr_mode_chk.isChecked(),
@@ -6074,6 +6077,9 @@ class VideoHighlighterGUI(QWidget):
             if page is not None:
                 length = page.length_key()
             apply_simple_run(config, length)
+        # XbotGo Falcon: the falcon: section of config.yaml / the preset.
+        from modules.falcon.preset import gui_settings as falcon_settings
+        config.update(falcon_settings(self.config_data))
         if overrides:
             config.update(overrides)
 
